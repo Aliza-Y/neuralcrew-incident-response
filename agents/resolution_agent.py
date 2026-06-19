@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from band import Agent
 from band.config import load_agent_config
+from band.core.simple_adapter import SimpleAdapter
+from band.core.types import PlatformMessage
 
 SYSTEM_PROMPT = """
 You are the Resolution Agent, the final step in enterprise incident response.
@@ -40,12 +42,24 @@ async def main():
 
     gemini_agent = GeminiResolutionAgent()
 
-    class GeminiAdapter:
+    class GeminiAdapter(SimpleAdapter[object]):
         def __init__(self, agent):
+            super().__init__()
             self.agent = agent
 
-        async def handle_message(self, message: str) -> str:
-            return self.agent.respond(message)
+        async def on_message(
+            self,
+            msg: PlatformMessage,
+            tools,
+            history,
+            participants_msg,
+            contacts_msg,
+            *,
+            is_session_bootstrap: bool,
+            room_id: str,
+        ) -> None:
+            response = self.agent.respond(msg.content)
+            await tools.send_message(response)
 
     adapter_instance = GeminiAdapter(gemini_agent)
 
