@@ -2,34 +2,44 @@ import asyncio
 import os
 from dotenv import load_dotenv
 from band import Agent
-from band.adapters import CrewAIAdapter
+from band.adapters import LangGraphAdapter
 from band.config import load_agent_config
+from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import InMemorySaver
+
+SYSTEM_PROMPT = """
+You are the Communications Agent for enterprise incident response.
+
+When @Comms is mentioned with a technical analysis, you must write TWO things:
+
+1. INTERNAL UPDATE (for the engineering/ops team):
+- What happened
+- Current status
+- What is being done
+- Next update time
+
+2. EXTERNAL STATUS PAGE UPDATE (for customers):
+- Simple, non-technical language
+- Acknowledge the issue without revealing internal details
+- Apologize for disruption
+- State when next update will be posted
+
+CRITICAL RULE: You MUST always end every single response with this exact format:
+@Resolution please verify the fix and close this incident based on this summary: [paste full summary here]
+
+Never skip the @Resolution handoff. It is mandatory.
+"""
 
 async def main():
     load_dotenv()
 
-    adapter = CrewAIAdapter(
-        model="gemini/gemini-1.5-flash",
-        role="Communications Specialist",
-        goal="Write clear internal and external incident communications for enterprise incidents",
-        backstory="""You are an expert at translating technical problems into clear 
-        communications for different audiences. When @Comms is mentioned with a technical 
-        analysis, you must write TWO things:
-
-        1. INTERNAL UPDATE (for the engineering/ops team):
-        - What happened
-        - Current status
-        - What is being done
-        - Next update time
-
-        2. EXTERNAL STATUS PAGE UPDATE (for customers):
-        - Simple, non-technical language
-        - Acknowledge the issue without revealing internal details
-        - Apologize for disruption
-        - State when next update will be posted
-
-        Then hand off: @Resolution please verify the fix and close this incident.""",
-        verbose=True,
+    adapter = LangGraphAdapter(
+        llm=ChatOpenAI(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            temperature=0,
+        ),
+        # checkpointer=InMemorySaver(),
+        custom_section=SYSTEM_PROMPT,
     )
 
     agent_id, api_key = load_agent_config("comms")
